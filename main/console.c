@@ -23,6 +23,9 @@
 #include "can.h"
 #include "fs.h"
 #include "xvprintf.h"
+#if CONFIG_IDF_TARGET_ESP32
+    #include "driver/uart.h"
+#endif
 
 #if CONFIG_LOG_COLORS
 static const bool use_colors = true;
@@ -182,29 +185,61 @@ void console_task_interactive(void* arg) {
 void initialize_console(void) {
     /* Disable buffering on stdin */
     setvbuf(stdin, NULL, _IONBF, 0);
-    /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
-    esp_vfs_dev_usb_serial_jtag_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
-    /* Move the caret to the beginning of the next line on '\n' */
-    esp_vfs_dev_usb_serial_jtag_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+
+    #if CONFIG_IDF_TARGET_ESP32
+        /* Set up UART for the console */
+        const uart_config_t uart_config = {
+            .baud_rate = 115200,
+            .data_bits = UART_DATA_8_BITS,
+            .parity = UART_PARITY_DISABLE,
+            .stop_bits = UART_STOP_BITS_1,
+            .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        };
+
+        /* Install the UART driver */
+        uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0);
+        uart_param_config(UART_NUM_0, &uart_config);
+
+        /* Asign VFS to UART */
+        //uart_vfs_dev_use_driver(UART_NUM_0);
+        esp_vfs_dev_uart_use_driver(UART_NUM_0);
+    #elif CONFIG_IDF_TARGET_ESP32C3
+        /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
+        esp_vfs_dev_usb_serial_jtag_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+
+        /* Move the caret to the beginning of the next line on '\n' */
+        esp_vfs_dev_usb_serial_jtag_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+
+        usb_serial_jtag_driver_config_t usb_serial_jtag_config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+
+        /* Install USB-SERIAL-JTAG driver for interrupt-driven reads and writes */
+        ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb_serial_jtag_config));
+
+        /* Asign vfs to JTAG */
+        esp_vfs_usb_serial_jtag_use_driver();
+    #endif
+
     /* Enable non-blocking mode on stdin and stdout */
     fcntl(fileno(stdout), F_SETFL, 0);
     fcntl(fileno(stdin), F_SETFL, 0);
-    usb_serial_jtag_driver_config_t usb_serial_jtag_config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
-    /* Install USB-SERIAL-JTAG driver for interrupt-driven reads and writes */
-    ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb_serial_jtag_config));
-    /* Tell vfs to use usb-serial-jtag driver */
-    esp_vfs_usb_serial_jtag_use_driver();
+
+    /* Configure the console */
     console_config.max_cmdline_args = CONFIG_CONSOLE_MAX_CMDLINE_ARGS;
     console_config.max_cmdline_length = CONFIG_CONSOLE_MAX_CMDLINE_LENGTH;
     if (use_colors) console_config.hint_color = atoi(LOG_COLOR_CYAN);
+
+    /* Initializing */
     ESP_ERROR_CHECK(esp_console_init(&console_config));
-    // linenoiseSetMultiLine(1);
+
+    /* Config library linenoise */
+    linenoiseSetMultiLine(1);
     linenoiseSetCompletionCallback(&esp_console_get_completion);
     linenoiseSetHintsCallback((linenoiseHintsCallback*) &esp_console_get_hint);
     linenoiseHistorySetMaxLen(30);
     linenoiseSetMaxLineLen(console_config.max_cmdline_length);
     linenoiseHistoryLoad(HISTORY_PATH);
-    /* Register commands */
+
+    /* Record commands */
     esp_console_register_help_command();
     register_system();
     register_can_commands();
