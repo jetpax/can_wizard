@@ -185,7 +185,6 @@ static int canup(int argc, char **argv) {
             break;
     }
     switch (canup_args.speed->ival[0]) {
-        #if CONFIG_IDF_TARGET_ESP32C3
         case 1000:
             t_config = (twai_timing_config_t) TWAI_TIMING_CONFIG_1KBITS();
             break;
@@ -204,7 +203,6 @@ static int canup(int argc, char **argv) {
         case 20000:
             t_config = (twai_timing_config_t) TWAI_TIMING_CONFIG_20KBITS();
             break;
-        #endif
         case 25000:
             t_config = (twai_timing_config_t) TWAI_TIMING_CONFIG_25KBITS();
             break;
