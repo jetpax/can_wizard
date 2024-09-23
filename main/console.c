@@ -15,7 +15,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
-#include "driver/usb_serial_jtag.h"
 #include "cmd_system.h"
 #include "cmd_can.h"
 #include "cmd_utils.h"
@@ -23,9 +22,12 @@
 #include "fs.h"
 #include "xvprintf.h"
 
+#if CONFIG_IDF_TARGET_ESP32C3
 #include <driver/usb_serial_jtag_vfs.h>
-#if CONFIG_IDF_TARGET_ESP32
-    #include "driver/uart.h"
+#include "driver/usb_serial_jtag.h"
+#else
+#include <driver/uart_vfs.h>
+#include "driver/uart.h"
 #endif
 
 #if CONFIG_LOG_COLORS
@@ -204,7 +206,7 @@ void initialize_console(void) {
 
         /* Asign VFS to UART */
         //uart_vfs_dev_use_driver(UART_NUM_0);
-        esp_vfs_dev_uart_use_driver(UART_NUM_0);
+        uart_vfs_dev_use_driver(UART_NUM_0);
     #elif CONFIG_IDF_TARGET_ESP32C3
         /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
         usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
