@@ -23,11 +23,11 @@
 #include "xvprintf.h"
 
 #if CONFIG_IDF_TARGET_ESP32C3
-#include <driver/usb_serial_jtag_vfs.h>
-#include "driver/usb_serial_jtag.h"
+    #include <driver/usb_serial_jtag_vfs.h>
+    #include "driver/usb_serial_jtag.h"
 #else
-#include <driver/uart_vfs.h>
-#include "driver/uart.h"
+    #include <driver/uart_vfs.h>
+    #include "driver/uart.h"
 #endif
 
 #if CONFIG_LOG_COLORS
@@ -105,22 +105,22 @@ void console_task_tx(void* arg) {
         linenoiseHide(&ls);
         if (msg_to_print != NULL) {
             // if zero-length string - just refresh prompt. used for updating prompt
-            if(msg_to_print[0] != '\0') {
+            if (msg_to_print[0] != '\0') {
                 write(fd, msg_to_print, msg_to_print_size);
                 flushWrite();
             }
-            vRingbufferReturnItem(uart_tx_ringbuf, (void *) msg_to_print);
+            vRingbufferReturnItem(uart_tx_ringbuf, (void*) msg_to_print);
         }
         linenoiseShow(&ls);
         xSemaphoreGive(stdout_taken_sem);
-        xSemaphoreGive(console_taken_sem); 
+        xSemaphoreGive(console_taken_sem);
     }
 }
 
 void console_task_interactive(void* arg) {
     console_taken_sem = xSemaphoreCreateMutex();
     stdout_taken_sem = xSemaphoreCreateMutex();
-    char *buf = calloc(1, console_config.max_cmdline_length);
+    char* buf = calloc(1, console_config.max_cmdline_length);
     /* Figure out if the terminal supports escape sequences */
     printf("Testing your console...\n");
     const int probe_status = linenoiseProbe();
@@ -134,10 +134,10 @@ void console_task_interactive(void* arg) {
         linenoiseSetDumbMode(1);
     }
     printf("\n"
-       "Type 'help' to get the list of commands.\n"
-       "Use UP/DOWN arrows to navigate through command history.\n"
-       "Press TAB when typing command name to auto-complete.\n"
-       "Ctrl+C will terminate the console environment.\n");
+           "Type 'help' to get the list of commands.\n"
+           "Use UP/DOWN arrows to navigate through command history.\n"
+           "Press TAB when typing command name to auto-complete.\n"
+           "Ctrl+C will terminate the console environment.\n");
     ls.buflen = console_config.max_cmdline_length;
     ls.buf = buf;
     update_prompt();
@@ -190,38 +190,39 @@ void initialize_console(void) {
     /* Disable buffering on stdin */
     setvbuf(stdin, NULL, _IONBF, 0);
 
-    #if CONFIG_IDF_TARGET_ESP32
-        /* Set up UART for the console */
-        const uart_config_t uart_config = {
-            .baud_rate = 115200,
-            .data_bits = UART_DATA_8_BITS,
-            .parity = UART_PARITY_DISABLE,
-            .stop_bits = UART_STOP_BITS_1,
-            .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        };
+#if CONFIG_IDF_TARGET_ESP32C3
+    /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
+    usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
 
-        /* Install the UART driver */
-        uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0);
-        uart_param_config(UART_NUM_0, &uart_config);
+    /* Move the caret to the beginning of the next line on '\n' */
+    usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
 
-        /* Asign VFS to UART */
-        //uart_vfs_dev_use_driver(UART_NUM_0);
-        uart_vfs_dev_use_driver(UART_NUM_0);
-    #elif CONFIG_IDF_TARGET_ESP32C3
-        /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
-        usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+    usb_serial_jtag_driver_config_t usb_serial_jtag_config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
 
-        /* Move the caret to the beginning of the next line on '\n' */
-        usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+    /* Install USB-SERIAL-JTAG driver for interrupt-driven reads and writes */
+    ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb_serial_jtag_config));
 
-        usb_serial_jtag_driver_config_t usb_serial_jtag_config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+    /* Asign vfs to JTAG */
+    usb_serial_jtag_vfs_use_driver();
+#else
+    /* Set up UART for the console */
+    const uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+    };
 
-        /* Install USB-SERIAL-JTAG driver for interrupt-driven reads and writes */
-        ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb_serial_jtag_config));
+    /* Install the UART driver */
+    uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0);
+    uart_param_config(UART_NUM_0, &uart_config);
 
-        /* Asign vfs to JTAG */
-        usb_serial_jtag_vfs_use_driver();
-    #endif
+    /* Asign VFS to UART */
+    // uart_vfs_dev_use_driver(UART_NUM_0);
+    uart_vfs_dev_use_driver(UART_NUM_0);
+
+#endif
 
     /* Enable non-blocking mode on stdin and stdout */
     fcntl(fileno(stdout), F_SETFL, 0);
