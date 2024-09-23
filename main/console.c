@@ -15,7 +15,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
-#include "esp_vfs_usb_serial_jtag.h"
 #include "driver/usb_serial_jtag.h"
 #include "cmd_system.h"
 #include "cmd_can.h"
@@ -23,6 +22,8 @@
 #include "can.h"
 #include "fs.h"
 #include "xvprintf.h"
+
+#include <driver/usb_serial_jtag_vfs.h>
 #if CONFIG_IDF_TARGET_ESP32
     #include "driver/uart.h"
 #endif
@@ -93,7 +94,8 @@ void console_task_tx(void* arg) {
     static const TickType_t prompt_timeout = pdMS_TO_TICKS(200);
     const int fd = fileno(stdout);
     size_t msg_to_print_size;
-    while(1) {
+    // ReSharper disable once CppDFAEndlessLoop
+    while (1) {
         char* msg_to_print = xRingbufferReceive(uart_tx_ringbuf, &msg_to_print_size, prompt_timeout);
         update_prompt();
         xSemaphoreTake(console_taken_sem, portMAX_DELAY);
@@ -205,10 +207,10 @@ void initialize_console(void) {
         esp_vfs_dev_uart_use_driver(UART_NUM_0);
     #elif CONFIG_IDF_TARGET_ESP32C3
         /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
-        esp_vfs_dev_usb_serial_jtag_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+        usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
 
         /* Move the caret to the beginning of the next line on '\n' */
-        esp_vfs_dev_usb_serial_jtag_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+        usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
 
         usb_serial_jtag_driver_config_t usb_serial_jtag_config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
 
@@ -216,7 +218,7 @@ void initialize_console(void) {
         ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb_serial_jtag_config));
 
         /* Asign vfs to JTAG */
-        esp_vfs_usb_serial_jtag_use_driver();
+        usb_serial_jtag_vfs_use_driver();
     #endif
 
     /* Enable non-blocking mode on stdin and stdout */
